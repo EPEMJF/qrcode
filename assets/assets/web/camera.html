@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css" />
+    <style>
+        .controls {
+          margin: 10px 0;
+        }
+        button {
+          padding: 8px;
+          margin: 4px;
+        }
+        #cropper-container {
+          display: none;
+          text-align: center;
+        }
+        canvas {
+          display: none;
+        }
+    </style>
+</head>
+<body>
+<video id="video" autoplay></video>
+<div class="controls">
+    <button id="flash">Flash: Off</button>
+    <button id="flip">Flip Camera</button>
+    <button id="capture">Capture</button>
+</div>
+<canvas id="canvas"></canvas>
+<div id="cropper-container">
+    <img id="cropper-image" src="" alt="Image to crop" style="max-width: 100%;" />
+    <button id="crop">Crop</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
+<script>
+    let currentStream = null;
+    let isFlashOn = false;
+    let useFrontCamera = false;
+    let cropper;
+
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const flashButton = document.getElementById('flash');
+    const flipButton = document.getElementById('flip');
+    const captureButton = document.getElementById('capture');
+    const cropperContainer = document.getElementById('cropper-container');
+    const cropperImage = document.getElementById('cropper-image');
+    const cropButton = document.getElementById('crop');
+
+    function stopMediaTracks() {
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+      }
+    }
+
+    async function startCamera(facingMode = 'environment', torch = false) {
+      console.log("startCamera called with facingMode:", facingMode);
+      stopMediaTracks();
+      const constraints = {
+        video: { facingMode, advanced: [{ torch }] }
+      };
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        currentStream = stream;
+        video.srcObject = stream;
+
+        const track = stream.getVideoTracks()[0];
+        if (track.getCapabilities().torch) {
+          flashButton.disabled = false;
+        } else {
+          flashButton.disabled = true;
+        }
+      } catch (err) {
+        console.error("Error accessing the camera: ", err);
+      }
+    }
+
+    startCamera('environment');
+
+    flashButton.addEventListener('click', async () => {
+      if (!currentStream) return;
+      const track = currentStream.getVideoTracks()[0];
+      if (track.getCapabilities().torch) {
+        isFlashOn = !isFlashOn;
+        await track.applyConstraints({ advanced: [{ torch: isFlashOn }] });
+        flashButton.textContent = `Flash: ${isFlashOn ? 'On' : 'Off'}`;
+      }
+    });
+
+    flipButton.addEventListener('click', () => {
+      useFrontCamera = !useFrontCamera;
+      startCamera(useFrontCamera ? 'user' : 'environment', isFlashOn);
+    });
+
+    captureButton.addEventListener('click', () => {
+      const context = canvas.getContext('2d');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      cropperImage.src = canvas.toDataURL('image/png');
+      cropperContainer.style.display = 'block';
+
+      cropper = new Cropper(cropperImage, { aspectRatio: 1, viewMode: 1 });
+    });
+
+    cropButton.addEventListener('click', () => {
+      if (cropper) {
+        const croppedCanvas = cropper.getCroppedCanvas();
+        const croppedImageData = croppedCanvas.toDataURL('image/png');
+
+        // Send the cropped image data back to Flutter
+        if (window.flutter_inappwebview) {
+          window.flutter_inappwebview.callHandler('flutterWebViewBridge', croppedImageData);
+        }
+        cropperContainer.style.display = 'none';
+      }
+    });
+</script>
+</body>
+</html>

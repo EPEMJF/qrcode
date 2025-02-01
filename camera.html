@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Capture with Cropping</title>
+    <style>
+        video, canvas {
+            display: block;
+            margin: 10px auto;
+            max-width: 100%;
+        }
+        button {
+            display: block;
+            margin: 10px auto;
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+        #crop-area {
+            border: 2px dashed #000;
+            position: absolute;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+<h2 style="text-align: center;">Take a Picture & Crop</h2>
+<video id="video" autoplay></video>
+<button id="capture">Capture</button>
+<canvas id="canvas"></canvas>
+<canvas id="croppedCanvas" style="display:none;"></canvas>
+<button id="crop" style="display:none;">Crop Image</button>
+<a id="download" download="captured_image.png" style="display:none;">Download Image</a>
+
+<script>
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const croppedCanvas = document.getElementById('croppedCanvas');
+    const captureButton = document.getElementById('capture');
+    const cropButton = document.getElementById('crop');
+    const downloadLink = document.getElementById('download');
+
+    navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => {
+            video.srcObject = stream;
+        })
+        .catch(err => {
+            console.error("Error accessing the camera: ", err);
+        });
+
+    captureButton.addEventListener('click', () => {
+        const context = canvas.getContext('2d');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        cropButton.style.display = 'block';
+    });
+
+    cropButton.addEventListener('click', () => {
+        const context = croppedCanvas.getContext('2d');
+        const cropX = canvas.width * 0.25;
+        const cropY = canvas.height * 0.25;
+        const cropWidth = canvas.width * 0.5;
+        const cropHeight = canvas.height * 0.5;
+
+        croppedCanvas.width = cropWidth;
+        croppedCanvas.height = cropHeight;
+        context.drawImage(canvas, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+
+        // Convert cropped image to downloadable link
+        const imageData = croppedCanvas.toDataURL('image/png');
+        downloadLink.href = imageData;
+        downloadLink.style.display = 'block';
+        downloadLink.textContent = 'Download Cropped Image';
+    });
+</script>
+</body>
+</html>
