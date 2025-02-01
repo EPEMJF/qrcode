@@ -3,124 +3,77 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Camera</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css" />
+    <title>Camera Capture with Cropping</title>
     <style>
-        .controls {
-          margin: 10px 0;
+        video, canvas {
+            display: block;
+            margin: 10px auto;
+            max-width: 100%;
         }
         button {
-          padding: 8px;
-          margin: 4px;
+            display: block;
+            margin: 10px auto;
+            padding: 10px 20px;
+            font-size: 16px;
         }
-        #cropper-container {
-          display: none;
-          text-align: center;
-        }
-        canvas {
-          display: none;
+        #crop-area {
+            border: 2px dashed #000;
+            position: absolute;
+            display: none;
         }
     </style>
 </head>
 <body>
-<video id="video" autoplay></video>
-<div class="controls">
-    <button id="flash">Flash: Off</button>
-    <button id="flip">Flip Camera</button>
+    <h2 style="text-align: center;">Take a Picture & Crop</h2>
+    <video id="video" autoplay></video>
     <button id="capture">Capture</button>
-</div>
-<canvas id="canvas"></canvas>
-<div id="cropper-container">
-    <img id="cropper-image" src="" alt="Image to crop" style="max-width: 100%;" />
-    <button id="crop">Crop</button>
-</div>
+    <canvas id="canvas"></canvas>
+    <canvas id="croppedCanvas" style="display:none;"></canvas>
+    <button id="crop" style="display:none;">Crop Image</button>
+    <a id="download" download="captured_image.png" style="display:none;">Download Image</a>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
-<script>
-    let currentStream = null;
-    let isFlashOn = false;
-    let useFrontCamera = false;
-    let cropper;
-
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const flashButton = document.getElementById('flash');
-    const flipButton = document.getElementById('flip');
-    const captureButton = document.getElementById('capture');
-    const cropperContainer = document.getElementById('cropper-container');
-    const cropperImage = document.getElementById('cropper-image');
-    const cropButton = document.getElementById('crop');
-
-    function stopMediaTracks() {
-      if (currentStream) {
-        currentStream.getTracks().forEach(track => track.stop());
-      }
-    }
-
-    async function startCamera(facingMode = 'environment', torch = false) {
-      console.log("startCamera called with facingMode:", facingMode);
-      stopMediaTracks();
-      const constraints = {
-        video: { facingMode, advanced: [{ torch }] }
-      };
-
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        currentStream = stream;
-        video.srcObject = stream;
-
-        const track = stream.getVideoTracks()[0];
-        if (track.getCapabilities().torch) {
-          flashButton.disabled = false;
-        } else {
-          flashButton.disabled = true;
-        }
-      } catch (err) {
-        console.error("Error accessing the camera: ", err);
-      }
-    }
-
-    startCamera('environment');
-
-    flashButton.addEventListener('click', async () => {
-      if (!currentStream) return;
-      const track = currentStream.getVideoTracks()[0];
-      if (track.getCapabilities().torch) {
-        isFlashOn = !isFlashOn;
-        await track.applyConstraints({ advanced: [{ torch: isFlashOn }] });
-        flashButton.textContent = `Flash: ${isFlashOn ? 'On' : 'Off'}`;
-      }
-    });
-
-    flipButton.addEventListener('click', () => {
-      useFrontCamera = !useFrontCamera;
-      startCamera(useFrontCamera ? 'user' : 'environment', isFlashOn);
-    });
-
-    captureButton.addEventListener('click', () => {
-      const context = canvas.getContext('2d');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      cropperImage.src = canvas.toDataURL('image/png');
-      cropperContainer.style.display = 'block';
-
-      cropper = new Cropper(cropperImage, { aspectRatio: 1, viewMode: 1 });
-    });
-
-    cropButton.addEventListener('click', () => {
-      if (cropper) {
-        const croppedCanvas = cropper.getCroppedCanvas();
-        const croppedImageData = croppedCanvas.toDataURL('image/png');
-
-        // Send the cropped image data back to Flutter
-        if (window.flutter_inappwebview) {
-          window.flutter_inappwebview.callHandler('flutterWebViewBridge', croppedImageData);
-        }
-        cropperContainer.style.display = 'none';
-      }
-    });
-</script>
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const croppedCanvas = document.getElementById('croppedCanvas');
+        const captureButton = document.getElementById('capture');
+        const cropButton = document.getElementById('crop');
+        const downloadLink = document.getElementById('download');
+        
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => {
+                video.srcObject = stream;
+            })
+            .catch(err => {
+                console.error("Error accessing the camera: ", err);
+            });
+        
+        captureButton.addEventListener('click', () => {
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            cropButton.style.display = 'block';
+        });
+        
+        cropButton.addEventListener('click', () => {
+            const context = croppedCanvas.getContext('2d');
+            const cropX = canvas.width * 0.25;
+            const cropY = canvas.height * 0.25;
+            const cropWidth = canvas.width * 0.5;
+            const cropHeight = canvas.height * 0.5;
+            
+            croppedCanvas.width = cropWidth;
+            croppedCanvas.height = cropHeight;
+            context.drawImage(canvas, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+            
+            // Convert cropped image to downloadable link
+            const imageData = croppedCanvas.toDataURL('image/png');
+            downloadLink.href = imageData;
+            downloadLink.style.display = 'block';
+            downloadLink.textContent = 'Download Cropped Image';
+        });
+    </script>
 </body>
 </html>
